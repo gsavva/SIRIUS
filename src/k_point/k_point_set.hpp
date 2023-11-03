@@ -25,6 +25,7 @@
 #ifndef __K_POINT_SET_HPP__
 #define __K_POINT_SET_HPP__
 
+#include "context/simulation_context.hpp"
 #include "k_point.hpp"
 #include "dft/smearing.hpp"
 
@@ -264,8 +265,12 @@ class K_point_set
         return -1;
     }
 
-    inline auto&
-    ctx()
+    auto ctx() -> Simulation_context&
+    {
+        return ctx_;
+    }
+
+    auto ctx() const -> Simulation_context const&
     {
         return ctx_;
     }
