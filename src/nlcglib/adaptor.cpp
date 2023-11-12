@@ -346,6 +346,13 @@ Energy::print_info() const
     }
 }
 
+MPI_Comm
+Energy::comm_world() const
+{
+    auto& ctx       = kset_.ctx();
+    return ctx.comm().native();
+}
+
 void
 Energy::set_chemical_potential(double mu)
 {

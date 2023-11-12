@@ -463,8 +463,7 @@ inner_beta(const Beta_projectors_base<T>& beta, const Simulation_context& ctx)
     }
 
     if (beta.comm().size() > 1) {
-        RTE_THROW("this needs to be fixed first");
-        beta.comm().allreduce(out.at(memory_t::host), static_cast<int>(out.size()));
+        beta.comm().allreduce(out.at(mem_t), static_cast<int>(out.size()));
     }
 
     return out;
@@ -516,7 +515,7 @@ inner_beta(const Beta_projectors_base<T>& beta, const Simulation_context& ctx, O
         }
     }
     if (beta.comm().size() > 1) {
-        beta.comm().allreduce(out.at(memory_t::host), static_cast<int>(out.size()));
+        beta.comm().allreduce(out.at(mem_t), static_cast<int>(out.size()));
     }
 
     return out;

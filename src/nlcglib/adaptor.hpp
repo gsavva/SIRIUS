@@ -26,6 +26,7 @@
 #define __NLCGLIB_ADAPTOR_HPP__
 
 #include <memory>
+#include <mpi.h>
 #include <nlcglib/interface.hpp>
 #include <cmath>
 #include <map>
@@ -239,6 +240,8 @@ class Energy : public nlcglib::EnergyBase
     get_chemical_potential() override;
     void
     print_info() const override;
+    MPI_Comm
+    comm_world() const override;
 
   private:
     K_point_set& kset_;

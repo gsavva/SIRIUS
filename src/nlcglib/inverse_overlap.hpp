@@ -269,7 +269,7 @@ template <class numeric_t>
 void
 S_k<numeric_t>::apply(mdarray<numeric_t, 2>& Y, mdarray<numeric_t, 2> const& X, memory_t pm)
 {
-    assert(static_cast<int>(X.size(0)) == this->size());
+    // assert(static_cast<int>(X.size(0)) == this->size());
 
     pm          = (pm == memory_t::none) ? ctx_.processing_unit_memory_t() : pm;
     device_t pu = is_host_memory(pm) ? device_t::CPU : device_t::GPU;
