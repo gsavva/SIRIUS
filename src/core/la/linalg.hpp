@@ -25,9 +25,11 @@
 #ifndef __LINALG_HPP__
 #define __LINALG_HPP__
 
+#include <stdexcept>
 #include <stdint.h>
 #include "core/memory.hpp"
 #include "core/acc/acc.hpp"
+#include "core/rte/rte.hpp"
 #if defined(SIRIUS_GPU)
 #include "core/acc/acc_blas.hpp"
 #include "core/acc/acc_lapack.hpp"
@@ -267,8 +269,10 @@ class wrap
     lartg(T f, T g) const;
 
     template <typename T>
-    inline void
-    geqrf(ftn_int m, ftn_int n, dmatrix<T>& A, ftn_int ia, ftn_int ja);
+    inline void geqrf(ftn_int m, ftn_int n, dmatrix<T>& A, ftn_int ia, ftn_int ja);
+
+    template <typename T>
+    inline void dgmm(char sidemode, int m, int n, T const* A, int lda, T const* x, int incx, T* C, int ldc) const;
 };
 
 template <>
@@ -1998,6 +2002,56 @@ wrap::lartg(ftn_double f, ftn_double g) const
             ftn_double cs, sn, r;
             FORTRAN(dlartg)(&f, &g, &cs, &sn, &r);
             return std::make_tuple(cs, sn, r);
+        }
+        default: {
+            throw std::runtime_error(linalg_msg_wrong_type);
+            break;
+        }
+    }
+}
+
+template <>
+inline void
+wrap::dgmm(char sidemode, int m, int n, const ftn_double_complex* A, int lda, const ftn_double_complex* x, int incx,
+           ftn_double_complex* C, int ldc) const
+{
+    switch (la_) {
+        case lib_t::blas: {
+            // implement https://docs.nvidia.com/cuda/cublas/#id9
+            if (incx < 0) {
+                RTE_THROW("case not implemented");
+            }
+            switch (sidemode) {
+                case 'l':
+                case 'L': {
+#pragma omp parallel for
+                    for (int j = 0; j < n; ++j) {
+                        for (int i = 0; i < m; ++i) {
+                            C[i + j * ldc] = A[i + j * lda] * x[i * incx];
+                        }
+                    }
+                    return;
+                }
+                case 'r':
+                case 'R': {
+#pragma omp parallel for
+                    for (int j = 0; j < n; ++j) {
+                        ftn_double_complex xj = x[incx * j];
+                        for (int i = 0; i < m; ++i) {
+                            C[i + j * ldc] = A[i + j * lda] * xj;
+                        }
+                    }
+                    return;
+                }
+                default:
+                    throw std::runtime_error(linalg_msg_wrong_type);
+            }
+        }
+        case lib_t::gpublas: {
+            acc::blas::zdgmm(sidemode, m, n, reinterpret_cast<acc_complex_double_t const*>(A), lda,
+                             reinterpret_cast<acc_complex_double_t const*>(x), incx,
+                             reinterpret_cast<acc_complex_double_t*>(C), ldc);
+            return;
         }
         default: {
             throw std::runtime_error(linalg_msg_wrong_type);
