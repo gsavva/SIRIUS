@@ -39,6 +39,7 @@
 #include "hamiltonian/initialize_subspace.hpp"
 #include "hamiltonian/diagonalize.hpp"
 #include "dft/dft_ground_state.hpp"
+#include "dft/md_extrapolation.hpp"
 #include "sirius.hpp"
 
 using namespace sirius;
