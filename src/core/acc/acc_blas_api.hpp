@@ -360,7 +360,7 @@ sscal(ARGS&&... args) -> status_t
 }
 
 template <typename... ARGS>
-inline auto zdgmm(ARGS&... args) -> status_t {
+inline auto zdgmm(ARGS&&... args) -> status_t {
 #if defined(SIRIUS_ROCM)
     return rocblas_zdgmm(std::forward<ARGS>(args)...);
 #else
