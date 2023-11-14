@@ -26,6 +26,7 @@
 #define __ULTRASOFT_PRECOND_K_HPP__
 
 #include "context/simulation_context.hpp"
+#include "core/acc/acc.hpp"
 #include "hamiltonian/non_local_operator.hpp"
 #include "beta_projectors/beta_projectors_base.hpp"
 #include "core/fft/gvec.hpp"
@@ -266,6 +267,12 @@ Ultrasoft_preconditioner<numeric_t>::apply(mdarray<numeric_t, 2>& Y, const mdarr
                           X.at(pm), X.ld(), &la::constant<numeric_t>::zero(), bphi.at(pm, row_offset, 0), bphi.ld());
     }
     if (bp_.comm().size() > 1) {
+#ifdef SIRIUS_CUDA
+        cudaDeviceSynchronize();
+#endif
+#ifdef SIRIUS_ROCM
+        hipDeviceSynchronize();
+#endif
         bp_.comm().allreduce(bphi.at(pm), bphi.size());
     }
 

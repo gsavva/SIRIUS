@@ -463,6 +463,12 @@ inner_beta(const Beta_projectors_base<T>& beta, const Simulation_context& ctx)
     }
 
     if (beta.comm().size() > 1) {
+#ifdef SIRIUS_CUDA
+        cudaDeviceSynchronize();
+#endif
+#ifdef SIRIUS_ROCM
+        hipDeviceSynchronize();
+#endif
         beta.comm().allreduce(out.at(mem_t), static_cast<int>(out.size()));
     }
 
@@ -515,9 +521,14 @@ inner_beta(const Beta_projectors_base<T>& beta, const Simulation_context& ctx, O
         }
     }
     if (beta.comm().size() > 1) {
+#ifdef SIRIUS_CUDA
+        cudaDeviceSynchronize();
+#endif
+#ifdef SIRIUS_ROCM
+        hipDeviceSynchronize();
+#endif
         beta.comm().allreduce(out.at(mem_t), static_cast<int>(out.size()));
     }
-
     return out;
 }
 
