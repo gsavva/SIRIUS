@@ -71,7 +71,7 @@ LinearWfcExtrapolation::extrapolate(K_point_set& kset__, Density& density__, Pot
     }
 
     std::stringstream ss;
-    ss << "extraploate";
+    ss << "extrapolate";
     ctx.message(1, __func__, ss);
     /* H0 */
     auto H0 = Hamiltonian0<double>(potential__, false);
