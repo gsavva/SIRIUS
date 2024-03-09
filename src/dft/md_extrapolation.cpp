@@ -1,4 +1,5 @@
 #include "md_extrapolation.hpp"
+#include "core/env/env.hpp"
 #include "core/la/eigenproblem.hpp"
 #include "core/rte/rte.hpp"
 #include "core/wf/wave_functions.hpp"
@@ -9,10 +10,19 @@
 #include "core/memory.hpp"
 #include "potential/potential.hpp"
 #include <stdexcept>
+#include "core/env/env.hpp"
 
 namespace sirius {
 
 namespace md {
+
+LinearWfcExtrapolation::LinearWfcExtrapolation()
+{
+    if (env::skip_wfct_extrapolation()) {
+        this->skip_ = true;
+    }
+}
+
 void
 LinearWfcExtrapolation::push_back_history(const K_point_set& kset__, const Density& density__,
                                           const Potential& potential__)
@@ -23,6 +33,10 @@ LinearWfcExtrapolation::push_back_history(const K_point_set& kset__, const Densi
       - band energies
       into internal data structures
      */
+
+    if (this->skip_) {
+        return;
+    }
 
     int nbnd = kset__.ctx().num_bands();
     // auto& ctx = kset__.ctx();
@@ -62,7 +76,17 @@ LinearWfcExtrapolation::extrapolate(K_point_set& kset__, Density& density__, Pot
 {
     auto& ctx = kset__.ctx();
 
-    if (wfc_coefficients_.size() < 2) {
+    if (wfc_coefficients_.size() < 2 || this->skip_) {
+        // skip extrapolation, but regenerate density with updated ionic positions
+        // compute occupation numbers from new band energies
+        kset__.sync_band<double, sync_band_t::energy>();
+        kset__.find_band_occupancies<double>();
+
+        // generate density
+        density__.generate<double>(kset__, ctx.use_symmetry(), true /* add core */, true /* transform to rg */);
+        // generate potential
+        potential__.generate(density__, ctx.use_symmetry(), true);
+
         return;
     }
 

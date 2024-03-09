@@ -24,6 +24,7 @@ using wfc_coeffs_t = std::array<mdarray<std::complex<double>, 2>, 2>;
 class LinearWfcExtrapolation : MDExtrapolation
 {
   public:
+    LinearWfcExtrapolation();
     /// store plane-wave and band energies of the current time-step
     void
     push_back_history(const K_point_set& kset__, const Density& density__, const Potential& potential__) override;
@@ -36,6 +37,8 @@ class LinearWfcExtrapolation : MDExtrapolation
     std::list<kp_map<wfc_coeffs_t>> wfc_coefficients_;
     /// band-energies for spin up/down
     std::list<kp_map<mdarray<double, 2>>> band_energies_;
+    /// skip extrapolation
+    bool skip_{false};
 };
 
 } // namespace md
