@@ -27,6 +27,7 @@
 
 #include <stdexcept>
 #include <stdint.h>
+#include <string>
 #include "core/memory.hpp"
 #include "core/acc/acc.hpp"
 #include "core/rte/rte.hpp"
@@ -269,10 +270,16 @@ class wrap
     lartg(T f, T g) const;
 
     template <typename T>
-    inline void geqrf(ftn_int m, ftn_int n, dmatrix<T>& A, ftn_int ia, ftn_int ja);
+    inline void
+    geqrf(ftn_int m, ftn_int n, dmatrix<T>& A, ftn_int ia, ftn_int ja);
 
     template <typename T>
-    inline void dgmm(char sidemode, int m, int n, T const* A, int lda, T const* x, int incx, T* C, int ldc) const;
+    inline void
+    dgmm(char sidemode, int m, int n, T const* A, int lda, T const* x, int incx, T* C, int ldc) const;
+
+    template <typename T>
+    inline void
+    gesvd(char jobu, char jobvt, dmatrix<T> const& A, mdarray<real_type<T>, 1>& s, dmatrix<T>& U, dmatrix<T>& Vt) const;
 };
 
 template <>
@@ -2017,7 +2024,7 @@ wrap::dgmm(char sidemode, int m, int n, const ftn_double_complex* A, int lda, co
 {
     switch (la_) {
         case lib_t::blas: {
-            // implement https://docs.nvidia.com/cuda/cublas/#id9
+            // https: // docs.nvidia.com/cuda/cublas/index.html?highlight=dgmm#id10
             if (incx < 0) {
                 RTE_THROW("case not implemented");
             }
@@ -2204,6 +2211,48 @@ unitary_similarity_transform(int kind__, dmatrix<T>& A__, dmatrix<T> const& U__,
         wrap(lib_t::blas)
                 .gemm('N', c2, n__, n__, n__, &constant<T>::one(), tmp.at(memory_t::host), tmp.ld(),
                       U__.at(memory_t::host), U__.ld(), &constant<T>::zero(), A__.at(memory_t::host), A__.ld());
+    }
+}
+
+template <>
+inline void
+wrap::gesvd(char jobu, char jobvt, dmatrix<std::complex<double>> const& A, mdarray<double, 1>& s,
+            dmatrix<std::complex<double>>& U, dmatrix<std::complex<double>>& Vt) const
+{
+    switch (la_) {
+        case lib_t::scalapack: {
+            throw std::runtime_error("gesvd for scalapack has not been implemented");
+            break;
+        }
+        case lib_t::lapack: {
+            if (A.comm().size() > 1)
+                RTE_THROW("Matrix must not be distributed");
+            // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-fortran/2024-0/gesvd.html
+            auto& mempool            = get_memory_pool(memory_t::host);
+            int m                    = A.num_rows();
+            int n                    = A.num_cols();
+            int lwork                = 2 * std::max(m, n) + std::max(m, n);
+            ftn_double_complex* work = mempool.allocate<ftn_double_complex>(lwork);
+            ftn_double* rwork        = mempool.allocate<ftn_double>(std::max(1, 5 * std::min(m, n)));
+            char jobu                = 'A';
+            char jobvt               = 'A';
+            int lda                  = A.ld();
+            int ldvt                 = Vt.ld();
+            int ldu                  = U.ld();
+            ftn_int info;
+            FORTRAN(zgesvd)
+            (&jobu, &jobvt, &m, &n, reinterpret_cast<ftn_double_complex const*>(A.host_data()), &lda, s.host_data(),
+             reinterpret_cast<ftn_double_complex*>(U.host_data()), &ldu,
+             reinterpret_cast<ftn_double_complex*>(Vt.host_data()), &ldvt, work, &lwork, rwork, &info);
+            // check info state
+            if (info != 0) {
+                RTE_THROW("gesvd error: info=" + std::to_string(info));
+            }
+            break;
+        }
+        default:
+            RTE_THROW("not implemented");
+            break;
     }
 }
 
