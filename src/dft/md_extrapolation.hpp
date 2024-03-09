@@ -1,4 +1,5 @@
 #include "context/simulation_context.hpp"
+#include "core/wf/wave_functions.hpp"
 #include "hamiltonian/hamiltonian.hpp"
 #include "k_point/k_point_set.hpp"
 #include "core/memory.hpp"
@@ -19,8 +20,6 @@ class MDExtrapolation
 template <class T>
 using kp_map = std::map<kp_index_t::global, T>;
 
-using wfc_coeffs_t = std::array<mdarray<std::complex<double>, 2>, 2>;
-
 class LinearWfcExtrapolation : MDExtrapolation
 {
   public:
@@ -34,7 +33,7 @@ class LinearWfcExtrapolation : MDExtrapolation
 
   private:
     /// plane-wave coefficients
-    std::list<kp_map<wfc_coeffs_t>> wfc_coefficients_;
+    std::list<kp_map<std::shared_ptr<wf::Wave_functions<double>>>> wfc_;
     /// band-energies for spin up/down
     std::list<kp_map<mdarray<double, 2>>> band_energies_;
     /// skip extrapolation
