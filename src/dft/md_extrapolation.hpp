@@ -34,8 +34,12 @@ class LinearWfcExtrapolation : MDExtrapolation
   private:
     /// plane-wave coefficients
     std::list<kp_map<std::shared_ptr<wf::Wave_functions<double>>>> wfc_;
-    /// band-energies for spin up/down
-    std::list<kp_map<mdarray<double, 2>>> band_energies_;
+    /// store band energies as complex, they need to be transformed into a
+    /// pseudo-Hamiltonian matrix, which is complex
+    using e_vec_t = mdarray<std::complex<double>, 1>;
+    /// spin up/dn band energy
+    using e_vec_kp_t = std::array<e_vec_t, 2>;
+    std::list<kp_map<e_vec_kp_t>> band_energies_;
     /// skip extrapolation
     bool skip_{false};
 };
