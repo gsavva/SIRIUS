@@ -2214,6 +2214,79 @@ unitary_similarity_transform(int kind__, dmatrix<T>& A__, dmatrix<T> const& U__,
     }
 }
 
+/** Perform one of the following operations:
+ *    A <= U A U^{H} (kind = 0)
+ *    A <= U^{H} A U (kind = 1)
+ *
+ *    where A is a diagonal
+ */
+template <typename T>
+auto
+unitary_similarity_transform(int kind__, mdarray<T, 1> const& a__, matrix<T> const& U__)
+{
+
+    if (!(kind__ == 0 || kind__ == 1)) {
+        RTE_THROW("wrong 'kind' parameter");
+    }
+
+    auto out = zeros_like(U__, get_memory_pool(memory_t::host));
+    auto tmp = zeros_like(U__, get_memory_pool(memory_t::host));
+
+    int num_wf = U__.size(0);
+
+    // kind__ == 0 -> tmp <- U*diag(a) (r)
+    // kind__ == 1 -> tmp <- diag(a)*U (l)
+    char lr = kind__ == 0 ? 'r' : 'l';
+    la::wrap(lib_t::blas)
+            .dgmm(lr, num_wf, num_wf, U__.at(memory_t::host), U__.ld(), a__.at(memory_t::host), 1,
+                  tmp.at(memory_t::host), tmp.ld());
+
+    if (kind__ == 0) {
+        // return tmp * U^H  = (U * diag(a)) U^H
+        la::wrap(lib_t::blas)
+                .gemm('N', 'C', num_wf, num_wf, num_wf, &constant<T>::one(), tmp.at(memory_t::host), tmp.ld(),
+                      U__.at(memory_t::host), U__.ld(), &constant<T>::zero(), out.at(memory_t::host), out.ld());
+    } else {
+        // return U^H * tmp =  U^H * (diag(a) * U)
+        la::wrap(lib_t::blas)
+                .gemm('C', 'N', num_wf, num_wf, num_wf, &constant<T>::one(), U__.at(memory_t::host), U__.ld(),
+                      tmp.at(memory_t::host), tmp.ld(), &constant<T>::zero(), out.at(memory_t::host), out.ld());
+    }
+    return out;
+}
+
+/**
+ * create a diagonal matrix form an array
+ */
+template <typename T>
+auto
+diag(mdarray<T, 1> const& a__) -> mdarray<T, 2>
+{
+    int n = a__.size(0);
+    mdarray<T, 2> out({n, n}, get_memory_pool(memory_t::host));
+    out.zero();
+    for (int i = 0; i < n; ++i) {
+        out(i, i) = a__(i);
+    }
+    return out;
+}
+
+/**
+ * obtain the diagonal
+ */
+template <typename T>
+auto
+diag(mdarray<T, 2> const& A__) -> mdarray<T, 1>
+{
+    int n = A__.size(0);
+    mdarray<T, 1> out({n}, get_memory_pool(memory_t::host));
+    out.zero();
+    for (int i = 0; i < n; ++i) {
+        out(i) = A__(i,i);
+    }
+    return out;
+}
+
 template <>
 inline void
 wrap::gesvd(char jobu, char jobvt, dmatrix<std::complex<double>> const& A, mdarray<double, 1>& s,
