@@ -6368,6 +6368,140 @@ sirius_generate_rhoaug_q(void* const* handler__, int const* iat__, int const* nu
 
 /*
 @api begin
+sirius_generate_newdg:
+  doc: Generate D-matrix in case of complex density (linear response)
+  arguments:
+    handler:
+      type: gs_handler
+      attr: in, required
+      doc: DFT ground state handler.
+    iat:
+      type: int
+      attr: in, required
+      doc: Index of atom type.
+    num_atoms:
+      type: int
+      attr: in, required
+      doc: Total number of atoms.
+    num_gvec_loc:
+      type: int
+      attr: in, required
+      doc: Local number of G-vectors
+    num_spin_comp:
+      type: int
+      attr: in, required
+      doc: Number of spin components.
+    qpw:
+      type: complex
+      attr: in, required, dimension(ldq, num_gvec_loc)
+      doc: Augmentation operator for a givem atom type.
+    ldq:
+      type: int
+      attr: in, required
+      doc: Leading dimension of qpw array.
+    phase_factors_q:
+      type: complex
+      attr: in, required, dimension(num_atoms)
+      doc: Phase factors exp(i*q*r_alpha)
+    mill:
+      type: int
+      attr: in, required, dimension(3, num_gvec_loc)
+      doc: Miller indices (G-vectors in lattice coordinates)
+    Vg:
+      type: complex
+      attr: in, required, dimension(ld, num_atoms, num_spin_comp)
+      doc: Density matrix
+    ldd:
+      type: int
+      attr: in, required
+      doc: Leading dimension of density matrix.
+    rho_aug:
+      type: complex
+      attr: inout, required, dimension(num_gvec_loc, num_spin_comp)
+      doc: Resulting augmentation charge.
+    error_code:
+      type: int
+      attr: out, optional
+      doc: Error code
+@api end
+*/
+void
+sirius_generate_newdq(void* const* handler__, int const* iat__, int const* num_atoms__, int const* num_gvec_loc__,
+                         int const* num_spin_comp__, std::complex<double> const* qpw__, int const* ldq__,
+                         std::complex<double> const* phase_factors_q__, int const* mill__,
+                         std::complex<double> const* Vg__, int const* ldd__, std::complex<double>* rho_aug__,
+                         int* error_code__)
+{
+    using namespace sirius;
+    PROFILE("sirius_api::sirius_generate_newdq");
+    call_sirius(
+            [&]() {
+                auto& gs   = get_gs(handler__);
+                auto& sctx = gs.ctx();
+                /* index of atom type */
+                int iat           = *iat__ - 1;
+                int num_beta      = sctx.unit_cell().atom_type(iat).mt_basis_size();
+                int num_gvec_loc  = *num_gvec_loc__;
+                int num_spin_comp = *num_spin_comp__;
+                int N_nt          = sctx.unit_cell().atom_type(iat).num_atoms(); // number of atoms of this type
+
+                mdarray<std::complex<double>, 2> qpw({num_gvec_loc, num_beta * (num_beta + 1) / 2}, const_cast<std::complex<double>*>(qpw__));
+                // mdarray<std::complex<double>, 2> qpw({*ldq__, num_gvec_loc}, const_cast<std::complex<double>*>(qpw__));
+                mdarray<int, 2> mill({3, num_gvec_loc}, const_cast<int*>(mill__));
+                mdarray<std::complex<double>, 2> Vg({num_gvec_loc, num_spin_comp}, const_cast<std::complex<double>*>(Vg__));
+
+                mdarray<std::complex<double>, 2> tmp({num_gvec_loc, N_nt}, get_memory_pool(memory_t::host));
+                mdarray<std::complex<double>, 2> res({num_beta * (num_beta + 1) / 2, N_nt}, get_memory_pool(memory_t::host));
+                mdarray<std::complex<double>, 4> fin({num_spin_comp, num_beta, num_beta, *num_atoms__}, get_memory_pool(memory_t::host));
+
+                for (int is = 0; is < num_spin_comp; is++) {
+
+                    PROFILE_START("sirius_generate_newdg:tmp")
+                    #pragma omp parallel for
+                    for (int ig = 0; ig < num_gvec_loc; ig++) {
+                        for (int i = 0; i < N_nt; i++) {
+                            tmp(ig, i) = Vg(ig, is) * phase_factors_q__[i] *
+                            std::conj(sctx.gvec_phase_factor(r3::vector<int>(&mill(0, ig)), i));
+                        }
+                    }
+                    PROFILE_STOP("sirius_generate_newdg:tmp")
+                    //
+                    PROFILE_START("sirius_generate_newdq:gemm")
+                    // call ZGEMM('C', 'N', nij, N_nt, ngm, dcmplx(1.d0, 0.d0),
+                    //            atom_type(nt)%qpw, ngm,
+                    //            tmp, ngm,
+                    //            dcmplx(0.d0, 0.d0),
+                    //            res, nij)
+                    la::wrap(la::lib_t::blas)
+                            .gemm('C', 'N', num_beta * (num_beta + 1) / 2, N_nt, num_gvec_loc,
+                                  &la::constant<std::complex<double>>::one(),
+                                  qpw.at(memory_t::host), qpw.ld(),
+                                  tmp.at(memory_t::host), tmp.ld(),
+                                  &la::constant<std::complex<double>>::zero(),
+                                  res.at(memory_t::host), tmp.ld());
+                    PROFILE_STOP("sirius_generate_newdq:gemm")
+
+                    PROFILE_START("sirius_generate_newdq:lower_half")
+                    int ijh = 0;
+                    for (int ih = 0; ih < num_beta; ih++) {
+                        for (int jh = ih; jh < num_beta; jh++) {
+                            ijh += 1;
+                            for (int na = 0; na < N_nt; na++) {
+                                // fin(is, ih, jh, na) = omega * res(ijh, na);
+                                if (jh > ih) {
+                                    fin(is, jh, ih, na) = fin(is, ih, jh, na);
+                                }
+                            }
+                        }
+                    }
+                    PROFILE_STOP("sirius_generate_newdq:lower_half")
+                }
+            },
+            error_code__);
+}
+
+/*
+@api begin
 sirius_generate_d_operator_matrix:
   doc: Generate D-operator matrix.
   arguments:
